@@ -172,10 +172,14 @@ class FOOOFGroup(FOOOF):
         # Run linearly
         if n_jobs == 1:
             self._reset_group_results(len(self.power_spectra))
+            self._fit(power_spectrum=self.power_spectra[0,:])
+            self.group_results[0] = self._get_results()
+            peak_guess=self.gaussian_params_
             for ind, power_spectrum in \
-                _progress(enumerate(self.power_spectra), self.verbose, len(self)):
-                self._fit(power_spectrum=power_spectrum)
+                _progress(enumerate(self.power_spectra[1:,:]), self.verbose, len(self)):
+                self._fit(power_spectrum=power_spectrum,init_peak_guess=peak_guess)
                 self.group_results[ind] = self._get_results()
+                peak_guess=self.gaussian_params_
 
         # Run in parallel
         else:

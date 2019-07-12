@@ -321,7 +321,7 @@ class FOOOF():
         self.print_results(False)
 
 
-    def fit(self, freqs=None, power_spectrum=None, freq_range=None):
+    def fit(self, freqs=None, power_spectrum=None, freq_range=None, init_peak_guess=None):
         """Fit the full power spectrum as a combination of periodic and aperiodic components.
 
         Parameters
@@ -367,7 +367,11 @@ class FOOOF():
             self._spectrum_flat = self.power_spectrum - self._ap_fit
 
             # Find peaks, and fit them with gaussians
-            self.gaussian_params_ = self._fit_peaks(np.copy(self._spectrum_flat))
+            if init_peak_guess:
+                init_peak_guess=np.copy(init_peak_guess)
+                init_peak_guess=None
+            self.gaussian_params_ = self._fit_peaks(np.copy(self._spectrum_flat),init_guess=init_peak_guess)
+
 
             # Calculate the peak fit
             #  Note: if no peaks are found, this creates a flat (all zero) peak fit.
@@ -623,7 +627,7 @@ class FOOOF():
         return aperiodic_params
 
 
-    def _robust_ap_fit(self, freqs, power_spectrum):
+    def _robust_ap_fit(self, freqs, power_spectrum, init_guess=None):
         """Fit the aperiodic component of the power spectrum robustly, ignoring outliers.
 
         Parameters
@@ -666,7 +670,7 @@ class FOOOF():
         return aperiodic_params
 
 
-    def _fit_peaks(self, flat_iter):
+    def _fit_peaks(self, flat_iter, init_guess=None):
         """Iteratively fit peaks to flattened spectrum.
 
         Parameters
@@ -680,9 +684,12 @@ class FOOOF():
             Parameters that define the gaussian fit(s).
             Each row is a gaussian, as [mean, height, standard deviation].
         """
-
-        # Initialize matrix of guess parameters for gaussian fitting.
-        guess = np.empty([0, 3])
+        if init_guess:
+            #sort initial guesses by amplitude
+            init_guess=init_guess[init_guess[:, 1].argsort()]
+        else:
+            # Initialize matrix of guess parameters for gaussian fitting.
+            guess = np.empty([0, 3])
 
         # Find peak: Loop through, finding a candidate peak, and fitting with a guess gaussian.
         #  Stopping procedure based on either the limit on # of peaks,
@@ -690,15 +697,23 @@ class FOOOF():
         while len(guess) < self.max_n_peaks:
 
             # Find candidate peak - the maximum point of the flattened spectrum.
-            max_ind = np.argmax(flat_iter)
-            max_height = flat_iter[max_ind]
+            if init_guess:
+                i_guess=len(guess)-1
+                max_ind=np.argmin(np.abs(self.freqs-init_guess[i_guess,1]))
+                max_height = np.max(flat_iter[max(max_ind-1,0):min(max_ind+1,self.freqs.shape[0])])
+            else:
+                max_ind = np.argmax(flat_iter)
+                max_height = flat_iter[max_ind]
 
             # Stop searching for peaks peaks once drops below height threshold.
             if max_height <= self.peak_threshold * np.std(flat_iter):
                 break
 
             # Set the guess parameters for gaussian fitting - mean and height.
-            guess_freq = self.freqs[max_ind]
+            if init_guess:
+                guess_freq = init_guess[i_guess,0]
+            else:
+                guess_freq = self.freqs[max_ind]
             guess_height = max_height
 
             # Halt fitting process if candidate peak drops below minimum height.
@@ -729,6 +744,7 @@ class FOOOF():
                 guess_std = self._gauss_std_limits[0]
             if guess_std > self._gauss_std_limits[1]:
                 guess_std = self._gauss_std_limits[1]
+
 
             # Collect guess parameters.
             guess = np.vstack((guess, (guess_freq, guess_height, guess_std)))

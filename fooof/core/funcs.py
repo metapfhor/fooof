@@ -91,8 +91,8 @@ def expo_nk_function(xs, *params):
 
     offset, exp = params
 
-    ys = ys + offset - np.log10(xs**exp)
-
+    #ys = ys + offset - np.log10(xs**exp)
+    ys = ys + offset - exp*np.log10(xs)
     return ys
 
 
